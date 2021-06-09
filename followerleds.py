@@ -2,6 +2,7 @@ import panel
 import json
 import datetime
 import signal
+import random
 
 import paho.mqtt.client as mqtt
 import sqlite3
@@ -9,6 +10,8 @@ import re
 
 con = sqlite3.connect('led.db')
 cur = con.cursor()
+
+blinky = {}
 
 table_sql = """CREATE TABLE if not exists "leds" (
 	"id"	INTEGER NOT NULL UNIQUE,
@@ -43,7 +46,11 @@ def say_led_number(username, num):
 
 def update_led_number(username, num):
     x,y = pos2xy(num)
-    client.publish("chat/out", payload="@{user} deine LED  ist Nr. {num} und befindet sich auf {x}/{y}.".format(user=username, num=num, x=x, y=y))
+    mqtt_client.publish("chat/out", payload="@{user} deine LED ist Nr. {num} und befindet sich auf {x}/{y}.".format(user=username, num=num, x=x, y=y))
+
+def blink_info(username, num):
+    mqtt_client.publish("chat/out", payload="@{user} deine LED blinkt jetzt {num} mal.".format(user=username, num=int(num)))
+
 
 def update_user(username, colour=None, info=False):
     ### random ID
@@ -65,15 +72,19 @@ def update_user(username, colour=None, info=False):
         update_led_number(username, cur.fetchone()[0])
 
     con.commit()
-    update_panel()
+    #update_panel()
 
 def update_panel():
     panel.clear()
     cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL AND lastSeen>DATETIME('now', '-10800 seconds');")
     for led in cur.fetchall():
-        #print(led)
         if(led[1]):
-            panel.panel[led[0]]=led[2]
+            curcol = led[2]
+            if blinky.get(led[1], 0):
+                if blinky[led[1]] % 2:
+                    curcol = panel.Color(1,1,1)
+                blinky[led[1]] = blinky[led[1]]-1
+            panel.panel[led[0]]=curcol
 
     panel.display()
 
@@ -92,36 +103,42 @@ def on_message(client, userdata, msg):
         return
     m = json.loads(msg.payload)
     try:
-        if m.get('message').startswith('!led'):
-            num = regex.findall(m.get('message'))
+        chat_text = m.get('message').lower()
+        if chat_text.startswith('!led'):
+            num = regex.findall(chat_text)
             if len(num) == 1:
                 col = panel.Color(int(num[0][0]),int(num[0][1]),int(num[0][2]))
                 update_user(m.get('username'), col)
                 return
-            if m.get('message')[5:8] == "off":
+            if chat_text[5:8] == "off":
                 update_user(m.get('username'), panel.Color(1,1,1))
                 return
-            if m.get('message')[5:9] == "info":
+            if chat_text[5:9] == "info":
                 update_user(m.get('username'), info=True)
+                return
+            if chat_text[5:10] == "blink":
+                blinky[m.get('username')] = random.randint(5,20) * 2
+                update_user(m.get('username'))
+                blink_info(m.get('username'), blinky[m.get('username')]/2)
                 return
     except:
         pass
     
-    update_user(m.get('username'))
+    #update_user(m.get('username'))
     
 
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, SignalHandler)
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
+    mqtt_client = mqtt.Client()
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
 
-    client.connect("192.168.1.21", 1883, 60)
-    client.subscribe("chat/in")
+    mqtt_client.connect("192.168.1.21", 1883, 60)
+    mqtt_client.subscribe("chat/in")
 
     panel.init_strip()
 
     panel.display()
 
-    client.loop_forever()
+    mqtt_client.loop_forever()
