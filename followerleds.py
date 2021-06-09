@@ -11,7 +11,80 @@ import re
 con = sqlite3.connect('led.db')
 cur = con.cursor()
 
-blinky = {}
+effects = {}
+state = {}
+
+def blink(username, color):
+    ret = color
+    if state.get(username, 0):
+        if state[username] % 2:
+            ret = panel.Color(1,1,1)
+        state[username] = state[username] - 1
+    else:
+        del(effects[username])
+    return ret
+
+
+boomcolors = [
+    panel.Color(1,1,1),
+    panel.Color(10,10,10),
+    panel.Color(20,20,20),
+    panel.Color(40,40,40),
+    panel.Color(70,70,70),
+    panel.Color(130,130,130),
+    panel.Color(190,190,190),
+    panel.Color(255,255,255),
+    panel.Color(255,255,255),
+    panel.Color(255,255,255),
+]
+def boom(username, color):
+    ret = color
+    if state.get(username, 0):
+        ret = boomcolors[state[username] - 1]
+        print("boom: ", ret)
+        state[username] = state[username] - 1
+    else:
+        del(effects[username])
+    return ret
+
+def rainbow(username, color):
+    pos = state[username]
+    if state[username] < 255:
+        state[username] = state[username] + 1
+    else:
+        state[username] = 0
+    brightness=1
+    # Input a value 0 to 255 to get a color value.
+    # The colours are a transition r - g - b - back to r.
+    if pos < 0 or pos > 255:
+        r = g = b = 0
+    elif pos < 85:
+        r = int(pos * 3)
+        g = int(255 - pos*3)
+        b = 0
+    elif pos < 170:
+        pos -= 85
+        r = int(255 - pos*3)
+        g = 0
+        b = int(pos*3)
+    else:
+        pos -= 170
+        r = 0
+        g = int(pos*3)
+        b = int(255 - pos*3)
+    return panel.Color(int(g/brightness), int(r/brightness), int(b/brightness))
+
+
+functions = {
+    "blink": blink,
+    "boom": boom,
+    "rainbow": rainbow,
+}
+functions_state = {
+    "blink": lambda : random.randint(50,200),
+    "boom": lambda :10,
+    "rainbow": lambda: random.randint(0,255),
+}
 
 table_sql = """CREATE TABLE if not exists "leds" (
 	"id"	INTEGER NOT NULL UNIQUE,
@@ -80,10 +153,8 @@ def update_panel():
     for led in cur.fetchall():
         if(led[1]):
             curcol = led[2]
-            if blinky.get(led[1], 0):
-                if blinky[led[1]] % 2:
-                    curcol = panel.Color(1,1,1)
-                blinky[led[1]] = blinky[led[1]]-1
+            if effects.get(led[1], 0):
+                curcol = effects[led[1]](led[1], curcol)
             panel.panel[led[0]]=curcol
 
     panel.display()
@@ -116,10 +187,13 @@ def on_message(client, userdata, msg):
             if chat_text[5:9] == "info":
                 update_user(m.get('username'), info=True)
                 return
-            if chat_text[5:10] == "blink":
-                blinky[m.get('username')] = random.randint(5,20) * 2
+            if chat_text[5:8] == "run":
                 update_user(m.get('username'))
-                blink_info(m.get('username'), blinky[m.get('username')]/2)
+                fun = chat_text[9:]
+                if fun in functions:
+                    print(fun, functions[fun])
+                    state[m.get('username')] = functions_state[fun]()
+                    effects[m.get('username')] = functions[fun]
                 return
     except:
         pass
@@ -129,7 +203,7 @@ def on_message(client, userdata, msg):
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, SignalHandler)
+    #signal.signal(signal.SIGINT, SignalHandler)
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
