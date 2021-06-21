@@ -74,16 +74,49 @@ def rainbow(username, color):
         b = int(255 - pos*3)
     return panel.Color(int(g/brightness), int(r/brightness), int(b/brightness))
 
+def fastbow(username, color):
+    pos = state[username]
+    if state[username] < 255:
+        state[username] = state[username] + 10
+    else:
+        state[username] = 0
+    brightness=1
+    # Input a value 0 to 255 to get a color value.
+    # The colours are a transition r - g - b - back to r.
+    if pos < 0 or pos > 255:
+        r = g = b = 0
+    elif pos < 85:
+        r = int(pos * 3)
+        g = int(255 - pos*3)
+        b = 0
+    elif pos < 170:
+        pos -= 85
+        r = int(255 - pos*3)
+        g = 0
+        b = int(pos*3)
+    else:
+        pos -= 170
+        r = 0
+        g = int(pos*3)
+        b = int(255 - pos*3)
+    return panel.Color(int(g/brightness), int(r/brightness), int(b/brightness))
+
+def identify(username, color):
+    return blink(username, color)
 
 functions = {
     "blink": blink,
     "boom": boom,
     "rainbow": rainbow,
+    "fastbow": fastbow,
+    "identify": identify,
 }
 functions_state = {
-    "blink": lambda : random.randint(50,200),
+    "blink": lambda : random.randint(25,100)*2,
     "boom": lambda :10,
     "rainbow": lambda: random.randint(0,255),
+    "fastbow": lambda: random.randint(0,255),
+    "identify": lambda:4,
 }
 
 table_sql = """CREATE TABLE if not exists "leds" (
@@ -124,6 +157,9 @@ def update_led_number(username, num):
 def blink_info(username, num):
     mqtt_client.publish("chat/out", payload="@{user} deine LED blinkt jetzt {num} mal.".format(user=username, num=int(num)))
 
+def send_help(username):
+    #print("@{user} du kannst folgende Funktionen ausführen:\n!led 1-255 1-255 1-255\n!led off\n!led info\n!led run[{commands}]".format(user=username, commands="|".join(functions.keys())))
+    mqtt_client.publish("chat/out", payload="@{user} du kannst folgende Funktionen ausführen:\n!led 1-255 1-255 1-255\n!led off\n!led info\n!led run[{commands}]".format(user=username, commands="|".join(functions.keys())))
 
 def update_user(username, colour=None, info=False):
     ### random ID
@@ -184,7 +220,7 @@ def on_message(client, userdata, msg):
             if chat_text[5:8] == "off":
                 update_user(m.get('username'), panel.Color(1,1,1))
                 return
-            if chat_text[5:9] == "info":
+            if chat_text[5:9] == "info" or chat_text[5:11] == "status":
                 update_user(m.get('username'), info=True)
                 return
             if chat_text[5:8] == "run":
@@ -194,6 +230,9 @@ def on_message(client, userdata, msg):
                     print(fun, functions[fun])
                     state[m.get('username')] = functions_state[fun]()
                     effects[m.get('username')] = functions[fun]
+                return
+            if chat_text[5:9] == "help":
+                send_help(m.get('username'))
                 return
     except:
         pass
