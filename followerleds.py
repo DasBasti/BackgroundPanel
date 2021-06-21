@@ -3,6 +3,9 @@ import json
 import datetime
 import signal
 import random
+import threading
+import time
+import queue
 
 import paho.mqtt.client as mqtt
 import sqlite3
@@ -10,6 +13,8 @@ import re
 
 con = sqlite3.connect('led.db')
 cur = con.cursor()
+
+mqtt_message_list = queue.Queue()
 
 effects = {}
 state = {}
@@ -134,7 +139,7 @@ con.commit()
 
 regex = re.compile("^\!led ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])$")
 
-
+pipeline_free=True
 def xy2pos(x, y):
     return (x * 32) + y
 
@@ -152,14 +157,29 @@ def say_led_number(username, num):
 
 def update_led_number(username, num):
     x,y = pos2xy(num)
-    mqtt_client.publish("chat/out", payload="@{user} deine LED ist Nr. {num} und befindet sich auf {x}/{y}.".format(user=username, num=num, x=x, y=y))
+    mqtt_message_list.put("@{user} deine LED ist Nr. {num} und befindet sich auf {x}/{y}.".format(user=username, num=num, x=x, y=y))
 
 def blink_info(username, num):
-    mqtt_client.publish("chat/out", payload="@{user} deine LED blinkt jetzt {num} mal.".format(user=username, num=int(num)))
+    mqtt_message_list.put("@{user} deine LED blinkt jetzt {num} mal.".format(user=username, num=int(num)))
 
 def send_help(username):
     #print("@{user} du kannst folgende Funktionen ausführen:\n!led 1-255 1-255 1-255\n!led off\n!led info\n!led run[{commands}]".format(user=username, commands="|".join(functions.keys())))
-    mqtt_client.publish("chat/out", payload="@{user} du kannst folgende Funktionen ausführen:\n!led 1-255 1-255 1-255\n!led off\n!led info\n!led run[{commands}]".format(user=username, commands="|".join(functions.keys())))
+    mqtt_message_list.put("@{user} du kannst folgende Funktionen ausführen:".format(user=username))
+    mqtt_message_list.put("!led 1-255 1-255 1-255")
+    mqtt_message_list.put("!led off")
+    mqtt_message_list.put("!led info|status")
+    mqtt_message_list.put("!led run [{commands}]".format(commands="|".join(functions.keys())))
+
+def send_mqtt_list():
+    global running
+    while(running):
+        if not mqtt_message_list.empty():
+            payload = mqtt_message_list.get()
+            mqtt_client.publish("chat/out", payload=payload)
+            time.sleep(1)
+        else:
+            time.sleep(0.1)
+
 
 def update_user(username, colour=None, info=False):
     ### random ID
@@ -185,6 +205,8 @@ def update_user(username, colour=None, info=False):
 
 def update_panel():
     panel.clear()
+    con = sqlite3.connect('led.db')
+    cur = con.cursor()
     cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL AND lastSeen>DATETIME('now', '-10800 seconds');")
     for led in cur.fetchall():
         if(led[1]):
@@ -196,7 +218,9 @@ def update_panel():
     panel.display()
 
 def SignalHandler(signum, frame):
+    global running
     con.commit()
+    running = False
     print("saved")
     quit()
 
@@ -206,7 +230,6 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     # message zerlegen
     if not msg.payload:
-        update_panel()
         return
     m = json.loads(msg.payload)
     try:
@@ -230,6 +253,8 @@ def on_message(client, userdata, msg):
                     print(fun, functions[fun])
                     state[m.get('username')] = functions_state[fun]()
                     effects[m.get('username')] = functions[fun]
+                else:
+                    mqtt_message_list.put("@{username} !led run [{commands}]".format(username=m.get('username'), commands="|".join(functions.keys())))
                 return
             if chat_text[5:9] == "help":
                 send_help(m.get('username'))
@@ -238,14 +263,25 @@ def on_message(client, userdata, msg):
         pass
     
     #update_user(m.get('username'))
-    
 
+def update_panel_thread():
+    global running
+    while(running):
+        update_panel()
+        time.sleep(0.1)
 
 if __name__ == "__main__":
-    #signal.signal(signal.SIGINT, SignalHandler)
+    global running
+    running = True
+    signal.signal(signal.SIGINT, SignalHandler)
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
+
+    send_queue = threading.Thread(target=send_mqtt_list)
+    send_queue.start()
+
+    display_fred = threading.Thread(target=update_panel_thread)
 
     mqtt_client.connect("192.168.1.21", 1883, 60)
     mqtt_client.subscribe("chat/in")
@@ -254,4 +290,5 @@ if __name__ == "__main__":
 
     panel.display()
 
+    display_fred.start()
     mqtt_client.loop_forever()
