@@ -259,11 +259,11 @@ def on_message(client, userdata, msg):
             if chat_text[5:9] == "help":
                 send_help(m.get('username'))
                 return
+        else:
+            update_user(m.get('username'))
     except:
         pass
     
-    #update_user(m.get('username'))
-
 def update_panel_thread():
     global running
     while(running):
