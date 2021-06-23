@@ -6,6 +6,7 @@ import random
 import threading
 import time
 import queue
+import random
 
 import paho.mqtt.client as mqtt
 import sqlite3
@@ -246,6 +247,11 @@ def on_message(client, userdata, msg):
             if chat_text[5:9] == "info" or chat_text[5:11] == "status":
                 update_user(m.get('username'), info=True)
                 return
+            if chat_text[5:11] == "random":
+                r,g,b = (random.randint(1,255), random.randint(1,255), random.randint(1,255))
+                update_user(m.get('username'), panel.Color(r,g,b))
+                mqtt_message_list.put("@{username} deine LED leuchtet jetzt in ({r} {g} {b})RGB".format(username=m.get('username'), r=r, g=g, b=b))
+                return
             if chat_text[5:8] == "run":
                 update_user(m.get('username'))
                 fun = chat_text[9:]
@@ -256,12 +262,13 @@ def on_message(client, userdata, msg):
                 else:
                     mqtt_message_list.put("@{username} !led run [{commands}]".format(username=m.get('username'), commands="|".join(functions.keys())))
                 return
-            if chat_text[5:9] == "help":
+            if chat_text[5:9] == "help" or chat_text[5:6] == "?":
                 send_help(m.get('username'))
                 return
         else:
             update_user(m.get('username'))
-    except:
+    except Exception as e:
+        print(e)
         pass
     
 def update_panel_thread():
