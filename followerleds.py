@@ -1,3 +1,4 @@
+# coding=utf-8
 import panel
 import json
 import datetime
@@ -7,10 +8,14 @@ import threading
 import time
 import queue
 import random
+from morse import morseTranslator
 
 import paho.mqtt.client as mqtt
 import sqlite3
 import re
+
+import requests
+
 
 con = sqlite3.connect('led.db')
 cur = con.cursor()
@@ -19,6 +24,17 @@ mqtt_message_list = queue.Queue()
 
 effects = {}
 state = {}
+discomode = 0
+
+disco_colors=[
+    panel.Color(0,0,0),
+    panel.Color(0,0,0),
+    panel.Color(0,0,0),
+    panel.Color(50,0,0),
+    panel.Color(0,50,0),
+    panel.Color(0,0,50),
+    panel.Color(30,30,30),
+]
 
 def blink(username, color):
     ret = color
@@ -107,22 +123,37 @@ def fastbow(username, color):
         b = int(255 - pos*3)
     return panel.Color(int(g/brightness), int(r/brightness), int(b/brightness))
 
+def morse(username, color):
+    if len(state[username])>1:
+        state[username] = state[username][1:]
+        return color if state[username][0] == "x" else panel.Color(0,0,0)
+    else:
+        del(effects[username])
+
 def identify(username, color):
     return blink(username, color)
+
+def stop(username, color):
+    del effects[username]
+    return color
 
 functions = {
     "blink": blink,
     "boom": boom,
     "rainbow": rainbow,
     "fastbow": fastbow,
+    "morse": morse,
     "identify": identify,
+    "stop": stop
 }
 functions_state = {
-    "blink": lambda : random.randint(25,100)*2,
-    "boom": lambda :10,
-    "rainbow": lambda: random.randint(0,255),
-    "fastbow": lambda: random.randint(0,255),
-    "identify": lambda:4,
+    "blink": lambda  args: random.randint(25,100)*2,
+    "boom": lambda  args:10,
+    "rainbow": lambda args: random.randint(0,255),
+    "fastbow": lambda args: random.randint(0,255),
+    "morse": lambda args: morseTranslator(" ".join(args)),
+    "identify": lambda args: 4,
+    "stop": lambda args: 0,
 }
 
 table_sql = """CREATE TABLE if not exists "leds" (
@@ -164,7 +195,6 @@ def blink_info(username, num):
     mqtt_message_list.put("@{user} deine LED blinkt jetzt {num} mal.".format(user=username, num=int(num)))
 
 def send_help(username):
-    #print("@{user} du kannst folgende Funktionen ausführen:\n!led 1-255 1-255 1-255\n!led off\n!led info\n!led run[{commands}]".format(user=username, commands="|".join(functions.keys())))
     mqtt_message_list.put("@{user} du kannst folgende Funktionen ausführen:".format(user=username))
     mqtt_message_list.put("!led 1-255 1-255 1-255")
     mqtt_message_list.put("!led off")
@@ -193,6 +223,12 @@ def update_user(username, colour=None, info=False):
         pass
 
     if(colour):
+        requests.post("https://platinenmacher.tech/pcb/panel/led/"+username ,
+                data={
+                    'auth': 123,
+                    'owner': username,
+                    'color': colour
+                    })
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now'), color=? WHERE owner=?;", (colour, username))
     else:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now') WHERE owner=?;", (username,))
@@ -205,17 +241,23 @@ def update_user(username, colour=None, info=False):
     #update_panel()
 
 def update_panel():
+    global discomode
     panel.clear()
-    con = sqlite3.connect('led.db')
-    cur = con.cursor()
-    cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL AND lastSeen>DATETIME('now', '-10800 seconds');")
-    for led in cur.fetchall():
-        if(led[1]):
-            curcol = led[2]
-            if effects.get(led[1], 0):
-                curcol = effects[led[1]](led[1], curcol)
-            panel.panel[led[0]]=curcol
-
+    if discomode == 0:
+        con = sqlite3.connect('led.db')
+        cur = con.cursor()
+        cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL AND lastSeen>DATETIME('now', '-10800 seconds');")
+        for led in cur.fetchall():
+            if(led[1]):
+                curcol = led[2]
+                if effects.get(led[1], 0):
+                    curcol = effects[led[1]](led[1], curcol)
+                panel.panel[led[0]]=curcol
+    else:
+        for led in range(1024):
+            panel.panel[led]=random.choice(disco_colors)
+        discomode -=1
+        print("Discomode: ", discomode)
     panel.display()
 
 def SignalHandler(signum, frame):
@@ -234,39 +276,52 @@ def on_message(client, userdata, msg):
         return
     m = json.loads(msg.payload)
     try:
+        username = m.get("username").lower()
         chat_text = m.get('message').lower()
         if chat_text.startswith('!led'):
             num = regex.findall(chat_text)
             if len(num) == 1:
                 col = panel.Color(int(num[0][0]),int(num[0][1]),int(num[0][2]))
-                update_user(m.get('username'), col)
+                print(int(num[0][0]),int(num[0][1]),int(num[0][2]))
+                update_user(username, col)
                 return
             if chat_text[5:8] == "off":
-                update_user(m.get('username'), panel.Color(1,1,1))
+                update_user(username, panel.Color(1,1,1))
                 return
             if chat_text[5:9] == "info" or chat_text[5:11] == "status":
-                update_user(m.get('username'), info=True)
+                update_user(username, info=True)
                 return
             if chat_text[5:11] == "random":
                 r,g,b = (random.randint(1,255), random.randint(1,255), random.randint(1,255))
-                update_user(m.get('username'), panel.Color(r,g,b))
+                update_user(username, panel.Color(r,g,b))
                 mqtt_message_list.put("@{username} deine LED leuchtet jetzt in ({r} {g} {b})RGB".format(username=m.get('username'), r=r, g=g, b=b))
                 return
+
+            """ !led run command
+                !led run command args
+            """ 
             if chat_text[5:8] == "run":
-                update_user(m.get('username'))
-                fun = chat_text[9:]
+                update_user(username)
+                cmd = chat_text[9:].split(" ")
+                fun = cmd[0]
+                args = cmd[1:]
+                print("Run:",fun)
                 if fun in functions:
                     print(fun, functions[fun])
-                    state[m.get('username')] = functions_state[fun]()
-                    effects[m.get('username')] = functions[fun]
+                    state[username] = functions_state[fun](args)
+                    effects[username] = functions[fun]
                 else:
                     mqtt_message_list.put("@{username} !led run [{commands}]".format(username=m.get('username'), commands="|".join(functions.keys())))
                 return
             if chat_text[5:9] == "help" or chat_text[5:6] == "?":
                 send_help(m.get('username'))
                 return
+            if chat_text[5:10] == "disco":
+                global discomode
+                discomode = 10
+                return
         else:
-            update_user(m.get('username'))
+            update_user(username)
     except Exception as e:
         print(e)
         pass
@@ -275,7 +330,10 @@ def update_panel_thread():
     global running
     while(running):
         update_panel()
-        time.sleep(0.1)
+        if discomode == 0:
+            time.sleep(0.1)
+        else:
+            time.sleep(1)
 
 if __name__ == "__main__":
     global running
