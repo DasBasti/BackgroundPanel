@@ -10,6 +10,7 @@ import queue
 import random
 from morse import morseTranslator
 import webcolors
+import levenshtein
 
 import paho.mqtt.client as mqtt
 import sqlite3
@@ -244,7 +245,8 @@ def show_message(username, message):
 This function sends help text about the fuctionality of this program
 """
 def send_help(username):
-    mqtt_message_list.put("@{user} du kannst folgende Funktionen ausführen:".format(user=username))
+    mqtt_message_list.put("@{user} du findest die LED Funktionen im Beschreibungstext.".format(user=username))
+    return
     mqtt_message_list.put("!led 1-255 1-255 1-255")
     mqtt_message_list.put("!led CSS3 Name (https://www.cssportal.com/css3-color-names)")
     mqtt_message_list.put("!led #Hexwert")
@@ -447,7 +449,6 @@ def on_message(client, userdata, msg):
                 return
 
             # 7.7. Try to match the command to a hex color
-            print(chat_text[5])
             if chat_text[5] == "#":
                 try:
                     col = webcolors.hex_to_rgb(cmd[0])
@@ -465,9 +466,24 @@ def on_message(client, userdata, msg):
                 return
 
             # 9. Print help 
-            else:
+            if chat_text[5:9] == "help" or chat_text[5:6] == "?":
                 send_help(m.get('username'))
                 return
+
+            # 10: Calculate Levenshtein distance for color if nothing matched so far
+            distance = 0
+            for css3_color in levenshtein.css3_colors:
+                lsdist = levenshtein.levenshtein_ratio_and_distance(css3_color.lower(), cmd[0], True)
+                if lsdist > distance:
+                    distance = lsdist
+                    col_named = css3_color
+            if distance > 0.6:
+                show_message(m.get('username'), "Ich habe für dich die Frabe {c} ausgesucht.".format(c=col_named))
+                col = webcolors.name_to_rgb(col_named)
+                update_user(username, panel.Color(col.red,col.green,col.blue))
+                return
+            send_help(m.get('username'))
+
         else:
             # 10. update user timestamp even if no !led command was issued
             update_user(username)
