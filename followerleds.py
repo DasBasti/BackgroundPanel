@@ -288,12 +288,14 @@ def update_user(username, color=None, info=False):
 
 
     # 3. Post the LED color and update last_seen on remote database
+    data = {
+        'auth': 123,
+        'owner': username,
+    }
+    if color: 
+        data.color = color
     requests.post("https://platinenmacher.tech/pcb/panel/led/"+username ,
-            data={
-                'auth': 123,
-                'owner': username,
-                'color': color
-                })
+            data=data)
     
     # 4. If a color is given (should be changed) we update the row with the color
     if(color):
@@ -466,7 +468,7 @@ def on_message(client, userdata, msg):
                 return
 
             # 9. Print help 
-            if chat_text[5:9] == "help" or chat_text[5:6] == "?":
+            if len(chat_text) == 4 or chat_text[5:9] == "help" or chat_text[5:6] == "?":
                 send_help(m.get('username'))
                 return
 
@@ -483,7 +485,6 @@ def on_message(client, userdata, msg):
                 update_user(username, panel.Color(col.red,col.green,col.blue))
                 return
             send_help(m.get('username'))
-
         else:
             # 10. update user timestamp even if no !led command was issued
             update_user(username)
