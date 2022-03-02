@@ -9,6 +9,7 @@ import time
 import queue
 import random
 from morse import morseTranslator
+import webcolors
 
 import paho.mqtt.client as mqtt
 import sqlite3
@@ -214,7 +215,7 @@ def xy2pos(x, y, grid=32):
 """
 Helper function to calculate x,y position for linear array coordinates
 """
-def pos2xy(pos, grid):
+def pos2xy(pos, grid=32):
     return (int(pos/grid)+1, (pos%grid)+1)
 
 
@@ -245,6 +246,8 @@ This function sends help text about the fuctionality of this program
 def send_help(username):
     mqtt_message_list.put("@{user} du kannst folgende Funktionen ausführen:".format(user=username))
     mqtt_message_list.put("!led 1-255 1-255 1-255")
+    mqtt_message_list.put("!led CSS3 Name (https://www.cssportal.com/css3-color-names)")
+    mqtt_message_list.put("!led #Hexwert")
     mqtt_message_list.put("!led off")
     mqtt_message_list.put("!led info|status")
     mqtt_message_list.put("!led [{commands}]".format(commands="|".join(functions.keys())))
@@ -433,6 +436,27 @@ def on_message(client, userdata, msg):
                 # 7.5. register function for username
                 effects[username] = functions[fun]
                 return
+            
+            # 7.6. Try to match the command to a CSS3 color
+            try:
+                col = webcolors.name_to_rgb(cmd[0])
+            except:
+                col = 0
+            if col:
+                update_user(username, panel.Color(col.red,col.green,col.blue))
+                return
+
+            # 7.7. Try to match the command to a hex color
+            print(chat_text[5])
+            if chat_text[5] == "#":
+                try:
+                    col = webcolors.hex_to_rgb(cmd[0])
+                except Exception as e:
+                    show_message(username, e)
+                    col = 0
+                if col:
+                    update_user(username, panel.Color(col.red,col.green,col.blue))
+                    return
 
             # 8. DISCOMODE!!! for 10 runs
             if chat_text[5:10] == "disco":
