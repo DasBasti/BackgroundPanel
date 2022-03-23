@@ -293,12 +293,13 @@ def update_user(username, color=None, info=False):
         'owner': username,
     }
     if color: 
-        data.color = color
+        data['color'] = color
+    
     requests.post("https://platinenmacher.tech/pcb/panel/led/"+username ,
             data=data)
     
     # 4. If a color is given (should be changed) we update the row with the color
-    if(color):
+    if color:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now'), color=? WHERE owner=?;", (color, username))
     else:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now') WHERE owner=?;", (username,))
