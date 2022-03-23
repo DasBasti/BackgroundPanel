@@ -399,8 +399,7 @@ def on_message(client, userdata, msg):
             num = regex.findall(chat_text)
             # 6.1. update LED color of the user with colors from message
             if len(num) == 1:
-                col = random.choice(disco_colors)
-                print(col)
+                col = panel.Color(int(num[0][0]),int(num[0][1]),int(num[0][2]))
                 update_user(username, col)
                 return
             # 6.2. "Off" command sets color to black
