@@ -286,29 +286,32 @@ def update_user(username, color=None, info=False):
         # User is already assigned to a different LED
         pass
 
-
-    # 3. Post the LED color and update last_seen on remote database
-    data = {
-        'auth': 123,
-        'owner': username,
-    }
-    if color: 
-        data['color'] = color
-    
-    requests.post("https://platinenmacher.tech/pcb/panel/led/"+username ,
-            data=data)
-    
-    # 4. If a color is given (should be changed) we update the row with the color
+    # 3. If a color is given (should be changed) we update the row with the color
     if color:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now'), color=? WHERE owner=?;", (color, username))
     else:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now') WHERE owner=?;", (username,))
 
-    # 5. If the LED info is requested we queue a message with the coordinates
+    # 4. If the LED info is requested we queue a message with the coordinates
     if info:
         cur.execute("SELECT id FROM leds WHERE owner=?;",(username,))
         update_led_number(username, cur.fetchone()[0])
 
+    # 5. Create Panel JSON
+    cur.execute("SELECT * FROM leds;")
+    panel_data = []
+    for led in cur.fetchall():
+        # 6. add to object
+        panel_data.append(
+            {
+                "id":led[0],
+                "owner":led[1],
+                "color":led[2],
+                "last_seen":led[3]
+            }
+        )
+    requests.post("https://platinenmacher.tech/pcb/panel/dumps" ,
+            data={'data':json.dumps(panel_data), 'auth':123})
     # 6. save database
     con.commit()
 """
