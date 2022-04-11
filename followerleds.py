@@ -289,6 +289,7 @@ def update_user(username, color=None, info=False):
     # 3. If a color is given (should be changed) we update the row with the color
     if color:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now'), color=? WHERE owner=?;", (color, username))
+        del effects[username]
     else:
         cur.execute("UPDATE leds SET lastSeen=DATETIME('now') WHERE owner=?;", (username,))
 
@@ -319,7 +320,7 @@ This function deletes a user from the database
 """
 def delete_user(username):
     # 1. Update the LED that is assigned to the user in username and remove the username
-    cur.execute("UPDATE leds SET owner=NULL where owner=?;",(username,))
+    cur.execute("UPDATE leds SET owner=NULL, color=NULL, last_seen=NULL where owner=?;",(username,))
     con.commit()
     # 2. Send message to the user
     show_message(username, "dein Name wurde aus der LED Tabelle entfernt")
