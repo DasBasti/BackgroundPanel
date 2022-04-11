@@ -25,11 +25,12 @@ morse_alphabet = {
 "X" : "xxx x x xxx ",
 "Y" : "xxx x xxx xxx ",
 "Z" : "xxx xxx x x ",
+" " : "  ",
 }
 
 def morseTranslator(input):
     print("Translate:", input)
     res = ""
     for c in input.upper():
-        res += morse_alphabet[c]
+        res += morse_alphabet.get(c, "")
     return res
