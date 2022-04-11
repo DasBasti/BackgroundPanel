@@ -131,7 +131,7 @@ Same function as rainbow but 10x faster
 """
 def fastbow(username, color):
     pos = state[username]
-    if state[username] < 255:
+    if state[username] < 245:
         state[username] = state[username] + 10
     else:
         state[username] = 0
@@ -466,7 +466,7 @@ def on_message(client, userdata, msg):
                     return
 
             # 8. DISCOMODE!!! for 10 runs
-            if chat_text[5:10] == "disco":
+            if chat_text[5:10] == "disco" or chat_text[5:10] == "disko" :
                 global discomode
                 discomode = 10
                 return
