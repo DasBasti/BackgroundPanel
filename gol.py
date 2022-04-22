@@ -19,16 +19,23 @@ def addColor(c1, c2):
     cm1 = getColor(c1)
     cm2 = getColor(c2)
     return panel.Color(
-        min(255,math.floor((cm1[1]+cm2[1])/inherit)),
-        min(255,math.floor((cm1[2]+cm2[2])/inherit)),
-        min(255,math.floor((cm1[3]+cm2[3])/inherit)))
+        min(255,math.floor((cm1[1]+cm2[1])/(inherit+random.randint(0,2)/10))),
+        min(255,math.floor((cm1[2]+cm2[2])/(inherit+random.randint(0,2)/10))),
+        min(255,math.floor((cm1[3]+cm2[3])/(inherit+random.randint(0,2)/10))))
 
 def init():
     global field
+    global running
+    running = True
     for cell in range(1024):
         c=0
         if(random.randint(0,10)>4): 
-            c=panel.Color(random.randint(0,200),random.randint(0,200),random.randint(0,200))
+            c=random.choice([
+                panel.Color(200,0,0),
+                panel.Color(0,200,0),
+                panel.Color(0,0,200),
+                panel.Color(100,100,100),                    
+            ])
         field[cell]=c
 
 def run():
