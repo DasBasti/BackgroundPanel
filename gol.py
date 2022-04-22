@@ -2,8 +2,9 @@ import random
 import panel
 import time
 import math
+import code
 
-field = []
+field = [0]*1024
 aging = 10
 inherit = 1.5
 
@@ -25,7 +26,10 @@ def addColor(c1, c2):
 def init():
     global field
     for cell in range(1024):
-        field.append(panel.panel[cell])
+        c=0
+        if(random.randint(0,10)>4): 
+            c=panel.Color(random.randint(0,200),random.randint(0,200),random.randint(0,200))
+        field[cell]=c
 
 def run():
     global field

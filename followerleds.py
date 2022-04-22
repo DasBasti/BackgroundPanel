@@ -18,6 +18,8 @@ import re
 
 import requests
 
+import gol
+
 """
 Global sqlite connections and cursor
 """
@@ -34,6 +36,7 @@ state = {}
 # DISCOMODE!!!
 discomode = 0
 partymode = 0
+game_of_life = 0
 
 disco_colors=[
     panel.Color(0,0,0),
@@ -498,6 +501,14 @@ def on_message(client, userdata, msg):
                 for c in range(1024):
                     party_map(c)
                 return
+            
+            #8.2 Game Of Life
+            if chat_text[5:8] == "gol":
+                global game_of_life
+                if not game_of_life:
+                    game_of_life = True
+                    gol.init()
+                return
 
             # 9. Print help 
             if len(chat_text) == 4 or chat_text[5:9] == "help" or chat_text[5:6] == "?":
@@ -529,12 +540,21 @@ This function runs the panel updating
 """
 def update_panel_thread():
     global running
+    global game_of_life
     while(running):
-        update_panel()
-        if discomode == 0:
-            time.sleep(0.1)
+        if game_of_life:
+            gol.run()
+            gol.display()
+            if not gol.running:
+                game_of_life = False
+            time.sleep(0.1)         
+            
         else:
-            time.sleep(1)
+            update_panel()
+            if discomode == 0:
+                time.sleep(0.1)
+            else:
+                time.sleep(1)
 
 
 """ 
