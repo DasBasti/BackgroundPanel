@@ -33,6 +33,7 @@ state = {}
 
 # DISCOMODE!!!
 discomode = 0
+partymode = 0
 
 disco_colors=[
     panel.Color(0,0,0),
@@ -82,7 +83,7 @@ def boom(username, color):
     if state.get(username, 0):
         # 2. Get color matching state value
         ret = boomcolors[state[username] - 1]
-        print("boom: ", ret)
+        #print("boom: ", ret)
         # 3. reduce state value by 1
         state[username] = state[username] - 1
     else:
@@ -165,6 +166,15 @@ Remove effect from username
 def stop(username, color):
     del effects[username]
     return color
+
+"""
+Map LED to a value on the party
+"""
+def party_map(led):
+    fun = random.choice(list(functions.items())[:-1])
+    #print("Map {} to {}".format(led, fun[0]))
+    effects[led] = functions[fun[0]]
+    state[led] = functions_state[fun[0]]("party")
 
 # Dict of available functions to be called by !led command
 functions = {
@@ -331,6 +341,7 @@ This function updates the array of LED colors to be displayed on the panel
 """
 def update_panel():
     global discomode
+    global partymode
     
     # 1. clear the last frame from memory
     panel.clear()
@@ -342,7 +353,10 @@ def update_panel():
         cur = con.cursor()
         
         # 3. Get all LEDs that have a lastSeen from the last 4 hours
-        cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL AND lastSeen>DATETIME('now', '-10800 seconds');")
+        if (partymode):
+            cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL;")
+        else:
+            cur.execute("SELECT * FROM leds WHERE owner IS NOT NULL AND lastSeen>DATETIME('now', '-10800 seconds');")
         for led in cur.fetchall():
             # 3.1. If the LED has a username assigned
             if(led[1]):
@@ -352,6 +366,9 @@ def update_panel():
                 #      and update the color with the return value of the function
                 if effects.get(led[1], 0):
                     curcol = effects[led[1]](led[1], curcol)
+                # Partymode runs effects and decreases itself
+                elif partymode and effects.get(led[0], 0):
+                    curcol = effects[led[0]](led[0], curcol)
                 # 3.4. Set the LED color by number
                 panel.panel[led[0]]=curcol
     
@@ -360,8 +377,11 @@ def update_panel():
         for led in range(1024):
             panel.panel[led]=random.choice(disco_colors)
         # 4.1 reduce discomode counter so we stop the disco at 0
-        discomode -=1
+        discomode -=1           
     
+    if(partymode):
+        partymode -= 1
+        
     # 5. Push the panel array data to the physical LED panel.
     panel.display()
 
@@ -437,7 +457,7 @@ def on_message(client, userdata, msg):
                 # 7.3. extract fuction and arguments from list
                 fun = cmd[0]
                 args = cmd[1:]
-                print(fun, functions[fun])
+                #print(fun, functions[fun])
                 # 7.4. set initial state for the function
                 state[username] = functions_state[fun](args)
                 
@@ -469,6 +489,14 @@ def on_message(client, userdata, msg):
             if chat_text[5:10] == "disco" or chat_text[5:10] == "disko" :
                 global discomode
                 discomode = 10
+                return
+            
+            #8.1 PARTY for 10 runs
+            if chat_text[5:10] == "party":
+                global partymode
+                partymode = 100
+                for c in range(1024):
+                    party_map(c)
                 return
 
             # 9. Print help 
