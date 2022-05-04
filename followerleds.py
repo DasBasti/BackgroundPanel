@@ -503,7 +503,7 @@ def on_message(client, userdata, msg):
                 return
             
             #8.2 Game Of Life
-            if chat_text[5:8] == "gol":
+            if chat_text[5:8] == "gol" and len(chat_text) == 8:
                 global game_of_life
                 if not game_of_life:
                     game_of_life = True
