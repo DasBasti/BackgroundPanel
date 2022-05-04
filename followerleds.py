@@ -19,6 +19,8 @@ import re
 import requests
 
 import gol
+import pcb_string
+import text
 
 """
 Global sqlite connections and cursor
@@ -37,6 +39,7 @@ state = {}
 discomode = 0
 partymode = 0
 game_of_life = 0
+static_image = False
 
 disco_colors=[
     panel.Color(0,0,0),
@@ -534,6 +537,35 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(e)
         pass
+   
+"""
+This is the callback message for !pcb values
+"""   
+def on_pcb_message(client, userdata, msg):
+    # 1. Do we have a payload?
+    if not msg.payload:
+        return
+    # 2. Convert payload to object
+    global static_image
+    static_image = True
+    panel.clear()
+    
+    payload = json.loads(msg.payload)
+    print(payload)
+    
+    while(True):
+        text.draw_username_on_panel(payload.get("sender"), text.f, panel.Color(70,00,00))
+        if not any(panel.panel):
+            panel.display()
+            break
+    
+        pcb_string.draw_pcb_string(payload.get("code"))
+        panel.display()
+        time.sleep(0.1) 
+
+    static_image = False
+    text.reset()
+
     
 """
 This function runs the panel updating
@@ -541,7 +573,11 @@ This function runs the panel updating
 def update_panel_thread():
     global running
     global game_of_life
+    global static_image
     while(running):
+        if static_image:
+            continue
+                   
         if game_of_life:
             gol.run()
             gol.display()
@@ -568,10 +604,14 @@ if __name__ == "__main__":
     # 2. Hook into SIGINT to save on closing
     signal.signal(signal.SIGINT, SignalHandler)
     
-    # 3. Initialize MQTT client
+    # 3. Initialize MQTT clients
     mqtt_client = mqtt.Client()
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
+    
+    mqtt_pcb = mqtt.Client()
+    mqtt_pcb.on_connect = on_connect
+    mqtt_pcb.on_message = on_pcb_message
 
     # 4. Init and start MQTT sending thread
     send_queue = threading.Thread(target=send_mqtt_list)
@@ -583,6 +623,9 @@ if __name__ == "__main__":
     # 6. connect to MQTT broker
     mqtt_client.connect("192.168.0.11", 1883, 60)
     mqtt_client.subscribe("chat/in")
+    
+    mqtt_pcb.connect("cloud.eieiei.lol", 1883, 60)
+    mqtt_pcb.subscribe("pcb/all/stream/panel")
 
     # 7. Create LED array and initialize WS2812 LEDs
     panel.init_strip()
@@ -594,4 +637,6 @@ if __name__ == "__main__":
     display_fred.start()
     
     #10. process MQTT messagges
-    mqtt_client.loop_forever()
+    while(True):
+        mqtt_client.loop()
+        mqtt_pcb.loop()
