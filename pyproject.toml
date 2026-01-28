@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "followerpanel"
+version = "1.0.0"
+description = "Twitch-integrated LED panel controller for WS2812 LEDs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "rpi-ws281x>=5.0.0",
+    "paho-mqtt>=2.0.0",
+    "webcolors>=24.0.0",
+    "Pillow>=10.0.0",
+    "requests>=2.31.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "pytest>=8.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.setuptools]
+py-modules = [
+    "config",
+    "controller",
+    "followerleds",
+    "gol",
+    "hardware",
+    "interfaces",
+    "levenshtein",
+    "morse",
+    "panel",
+    "pcb_string",
+    "simulator",
+    "text",
+]

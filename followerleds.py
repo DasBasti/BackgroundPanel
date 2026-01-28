@@ -1,5 +1,11 @@
 # coding=utf-8
-import panel
+from config import USE_SIMULATOR
+
+if USE_SIMULATOR:
+    import simulator as panel
+else:
+    import panel
+
 import json
 import datetime
 import signal
@@ -218,7 +224,7 @@ for id in range(1024):
 con.commit()
 
 # precompiled regex for finding three integers range 0-255
-regex = re.compile("^\!led ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])$")
+regex = re.compile(r"^!led ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5]) ([01]?[0-9]?[0-9]|2[0-4][0-9]|25[0-5])$")
 
 # ???
 pipeline_free=True
@@ -369,7 +375,7 @@ def update_panel():
             # 3.1. If the LED has a username assigned
             if(led[1]):
                 # 3.2. Set the panel LED to the color in the database
-                curcol = led[2]
+                curcol = int(led[2]) if led[2] else 0
                 # 3.3. If an effect is registered for the username we execute the effect function 
                 #      and update the color with the return value of the function
                 if effects.get(led[1], 0):
