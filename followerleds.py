@@ -290,17 +290,19 @@ This function updates the LED row in the database
 """
 def update_user(username, color=None, info=False):
     # 1. We get a random unassigned LED from the database.
-    cur.execute("SELECT * FROM leds WHERE owner IS NULL ORDER BY RANDOM();")
-    
-    # 2. We try to assign the LED to the user in username. The username column is unique and if the user
-    #    already has a LED assigned this will throw. We ignore the exception.
-    res = cur.fetchone()
-    try:
-        cur.execute("UPDATE leds SET owner=? WHERE id=?",(username, res[0]))
-        # User is now assigned to the LED
-    except:
-        # User is already assigned to a different LED
-        pass
+    cur.execute("SELECT * FROM leds WHERE owner=?;", (username,))
+    usr = cur.fetchone()
+    if usr == None:
+        cur.execute("SELECT * FROM leds WHERE owner IS NULL ORDER BY RANDOM();")
+        # 1.1 If no free LED is selected, we want the oldest entry
+        usr = cur.fetchone()
+        if usr == None:
+           cur.execute("SELECT * FROM leds ORDER BY lastSeen ASC LIMIT 1;")
+           usr = cur.fetchone()
+           print("Goodbye "+usr[1]+" welcome "+username)
+        # 2. We try to assign the LED to the user in username. The username column is unique and if the user
+        #    already has a LED assigned this will throw. We ignore the exception.
+        cur.execute("UPDATE leds SET owner=? WHERE id=?",(username, usr[0]))
 
     # 3. If a color is given (should be changed) we update the row with the color
     if color:
@@ -408,7 +410,12 @@ def SignalHandler(signum, frame):
 Callback on MQTT connection
 """
 def on_connect(client, userdata, flags, rc):
-    print("connected")
+    print("local connected")
+
+def on_pcb_connect(client, userdata, flags, rc):
+    print("cloud connected")
+    #mqtt_pcb.publish("status/panel","online", retain=True)
+
 
 """
 Callback on MQTT message
@@ -526,7 +533,7 @@ def on_message(client, userdata, msg):
                     distance = lsdist
                     col_named = css3_color
             if distance > 0.6:
-                show_message(m.get('username'), "Ich habe für dich die Frabe {c} ausgesucht.".format(c=col_named))
+                show_message(m.get('username'), "Ich habe für dich die Farbe {c} ausgesucht.".format(c=col_named))
                 col = webcolors.name_to_rgb(col_named)
                 update_user(username, panel.Color(col.red,col.green,col.blue))
                 return
@@ -551,10 +558,13 @@ def on_pcb_message(client, userdata, msg):
     panel.clear()
     
     payload = json.loads(msg.payload)
-    print(payload)
     
     while(True):
-        text.draw_username_on_panel(payload.get("sender"), text.f, panel.Color(70,00,00))
+        hex_color = payload.get("color", "#ffffff")
+        if hex_color == "":
+            hex_color = "#00ff00"
+        col = webcolors.hex_to_rgb(hex_color)
+        text.draw_username_on_panel(payload.get("sender"), text.f, panel.Color(col.red//2,col.green//2,col.blue//2))
         if not any(panel.panel):
             panel.display()
             break
@@ -609,9 +619,9 @@ if __name__ == "__main__":
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
     
-    mqtt_pcb = mqtt.Client()
-    mqtt_pcb.on_connect = on_connect
-    mqtt_pcb.on_message = on_pcb_message
+    #mqtt_pcb = mqtt.Client()
+    #mqtt_pcb.on_connect = on_pcb_connect
+    #mqtt_pcb.on_message = on_pcb_message
 
     # 4. Init and start MQTT sending thread
     send_queue = threading.Thread(target=send_mqtt_list)
@@ -621,11 +631,13 @@ if __name__ == "__main__":
     display_fred = threading.Thread(target=update_panel_thread)
 
     # 6. connect to MQTT broker
+    mqtt_client.username_pw_set("panel","panel")
     mqtt_client.connect("192.168.0.11", 1883, 60)
     mqtt_client.subscribe("chat/in")
     
-    mqtt_pcb.connect("cloud.eieiei.lol", 1883, 60)
-    mqtt_pcb.subscribe("pcb/all/stream/panel")
+    #mqtt_pcb.will_set("status/panel","offline",qos=1,retain=True)
+    #mqtt_pcb.connect("192.168.0.11", 1883, 60)
+    #mqtt_pcb.subscribe("pcb/all/stream/panel")
 
     # 7. Create LED array and initialize WS2812 LEDs
     panel.init_strip()
@@ -639,4 +651,4 @@ if __name__ == "__main__":
     #10. process MQTT messagges
     while(True):
         mqtt_client.loop()
-        mqtt_pcb.loop()
+        #mqtt_pcb.loop()
