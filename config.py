@@ -1,5 +1,7 @@
 """Centralized configuration for the LED panel controller."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 # Panel dimensions

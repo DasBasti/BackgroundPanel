@@ -4,6 +4,8 @@ This module provides a colorful Game of Life simulation that runs
 on the LED panel with color inheritance between cells.
 """
 
+from __future__ import annotations
+
 import math
 import random
 

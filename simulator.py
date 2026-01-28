@@ -5,6 +5,8 @@ in the terminal using ANSI color codes, useful for development and testing
 without physical hardware.
 """
 
+from __future__ import annotations
+
 import sys
 
 from config import GRID_HEIGHT, GRID_WIDTH, LED_COUNT

@@ -4,6 +4,8 @@ This module provides the main controller for the LED panel, handling MQTT
 communication, effect management, and user LED assignments via Twitch chat.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import queue

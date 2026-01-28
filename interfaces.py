@@ -1,5 +1,7 @@
 """Hardware abstraction layer interfaces for LED panel."""
 
+from __future__ import annotations
+
 from typing import Protocol
 
 

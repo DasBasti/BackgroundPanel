@@ -4,6 +4,8 @@ This module provides the WS2812Panel class for controlling a physical
 LED panel connected to a Raspberry Pi via the rpi_ws281x library.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from config import (
